@@ -1,0 +1,24 @@
+# Core
+python-dotenv
+pandas
+numpy
+requests
+httpx
+
+# RAG / vectorisation
+faiss-cpu
+langchain
+langchain-community
+langchain-huggingface
+langchain-mistralai
+sentence-transformers
+mistralai
+
+# API
+fastapi
+uvicorn[standard]
+pydantic
+
+# Tests / évaluation
+pytest
+ragas

@@ -1,0 +1,33 @@
+﻿# Environnement virtuel
+.venv/
+env/
+venv/
+.env
+.venv
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Variables d'environnement
+.env
+
+# Données locales
+data/*.csv
+data/*.json
+data/*.parquet
+vectorstore/*
+
+# Garder les dossiers vides
+!data/.gitkeep
+!vectorstore/.gitkeep
+!docs/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+
+# Système
+.DS_Store
+Thumbs.db
