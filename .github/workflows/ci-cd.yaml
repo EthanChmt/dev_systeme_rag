@@ -29,7 +29,7 @@ jobs:
       - name: Récupérer les données OpenAgenda
         env:
           OPENAGENDA_API_KEY: ${{ secrets.OPENAGENDA_API_KEY }}
-          OPENAGENDA_AGENDA_UID: "REMPLACE_PAR_TON_UID"
+          OPENAGENDA_AGENDA_UID: "2476341"
           OPENAGENDA_SEARCH: ""
           OPENAGENDA_CITY: ""
           OPENAGENDA_MAX_EVENTS: "300"
