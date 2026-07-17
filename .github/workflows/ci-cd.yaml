@@ -26,6 +26,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Récupérer les données OpenAgenda
+        env:
+          OPENAGENDA_API_KEY: ${{ secrets.OPENAGENDA_API_KEY }}
+          OPENAGENDA_AGENDA_UID: "REMPLACE_PAR_TON_UID"
+          OPENAGENDA_SEARCH: ""
+          OPENAGENDA_CITY: ""
+          OPENAGENDA_MAX_EVENTS: "300"
+        run: |
+          python scripts/fetch_openagenda_events.py
+
+      - name: Construire l'index FAISS
+        run: |
+          python scripts/build_faiss_index.py
+
       - name: Lancer les tests
         run: |
           pytest -v
@@ -67,7 +81,6 @@ jobs:
           from huggingface_hub import HfApi
 
           repo_id = "EthanChmt/open_agenda_RAG_OC"
-
           api = HfApi(token=os.environ["HF_TOKEN"])
 
           print("Attente de la fin du déploiement Hugging Face...")
