@@ -1,3 +1,16 @@
+---
+title: Puls Events RAG
+emoji: 🎭
+colorFrom: blue
+colorTo: purple
+sdk: gradio
+python_version: "3.11"
+app_file: app_gradio.py
+pinned: false
+---
+
+
+
 # POC Chatbot RAG — Puls-Events
 
 ## Objectif
