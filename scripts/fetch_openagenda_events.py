@@ -13,7 +13,7 @@ load_dotenv()
 
 API_KEY = os.getenv("OPENAGENDA_API_KEY")
 AGENDA_UID = os.getenv("OPENAGENDA_AGENDA_UID")
-CITY = os.getenv("OPENAGENDA_CITY", "Paris")
+CITY = os.getenv("OPENAGENDA_CITY", "")
 SEARCH = os.getenv("OPENAGENDA_SEARCH", "")
 MAX_EVENTS = int(os.getenv("OPENAGENDA_MAX_EVENTS", "300"))
 
@@ -106,7 +106,7 @@ def fetch_events():
         raise ValueError("OPENAGENDA_AGENDA_UID manquant dans le fichier .env")
 
     today = datetime.now(timezone.utc)
-    start_date = today - timedelta(days=365)
+    start_date = today
     end_date = today + timedelta(days=365)
 
     url = f"https://api.openagenda.com/v2/agendas/{AGENDA_UID}/events"
@@ -154,10 +154,83 @@ def fetch_events():
     rows = [normalize_event(event) for event in events]
     df = pd.DataFrame(rows)
 
+    if df.empty:
+        raise ValueError(
+            "Aucun événement récupéré. Vérifie la clé API, l'Agenda UID, "
+            "la période et les filtres."
+        )
+
+    initial_count = len(df)
+    # Suppression des doublons
+    df = df.drop_duplicates(subset=["uid"])
+
+    # Suppression des événements sans titre
+    df = df[df["title"].str.strip() != ""]
+
+    # Conversion des dates
+    df["begin"] = pd.to_datetime(df["begin"], errors="coerce", utc=True)
+    df["end"] = pd.to_datetime(df["end"], errors="coerce", utc=True)
+
+    # Suppression des événements sans date de début
+    df = df.dropna(subset=["begin"])
+
+    # Tri chronologique
+    df = df.sort_values(by="begin")
+
+    # Rapport qualité des données
+    initial_count = len(rows)
+    final_count = len(df)
+
+    missing_description = (df["description"] == "").sum()
+    missing_long_description = (df["long_description"] == "").sum()
+    missing_location = (df["location_name"] == "").sum()
+    missing_city = (df["city"] == "").sum()
+
+    min_date = df["begin"].min()
+    max_date = df["begin"].max()
+
+    def percentage(value, total):
+        return round((value / total) * 100, 2) if total else 0
+
+    print("\n" + "=" * 45)
+    print("RAPPORT QUALITÉ OPENAGENDA")
+    print("=" * 45)
+
+    print(f"Événements récupérés depuis l'API : {initial_count}")
+    print(f"Événements conservés après nettoyage : {final_count}")
+    print(f"Événements supprimés : {initial_count - final_count}")
+
+    print(
+        f"Descriptions manquantes : "
+        f"{missing_description} "
+        f"({percentage(missing_description, final_count)} %)"
+    )
+
+    print(
+        f"Descriptions longues manquantes : "
+        f"{missing_long_description} "
+        f"({percentage(missing_long_description, final_count)} %)"
+    )
+
+    print(
+        f"Lieux manquants : "
+        f"{missing_location} "
+        f"({percentage(missing_location, final_count)} %)"
+    )
+
+    print(
+        f"Villes manquantes : "
+        f"{missing_city} "
+        f"({percentage(missing_city, final_count)} %)"
+    )
+
+    print(f"Période couverte : {min_date} → {max_date}")
+    print("=" * 45 + "\n")
+
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(OUTPUT_PATH, index=False, encoding="utf-8-sig")
 
-    print(f"{len(df)} événements récupérés.")
+    print(f"{final_count} événements sauvegardés.")
     print(f"Fichier créé : {OUTPUT_PATH}")
 
 
