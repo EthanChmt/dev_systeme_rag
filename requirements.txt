@@ -22,3 +22,6 @@ pydantic
 # Tests / évaluation
 pytest
 ragas
+
+# Déploiement
+gradio
