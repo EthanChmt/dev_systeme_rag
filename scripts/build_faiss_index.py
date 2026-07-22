@@ -1,23 +1,40 @@
+import os
 from pathlib import Path
 
 import pandas as pd
-from langchain_core.documents import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
+from dotenv import load_dotenv
 from langchain_community.vectorstores import FAISS
+from langchain_core.documents import Document
+from langchain_mistralai import MistralAIEmbeddings
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 
-DATA_PATH = Path("data/events_openagenda.csv")
-INDEX_PATH = Path("vectorstore/faiss_index")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+ENV_PATH = PROJECT_ROOT / ".env"
 
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+DATA_PATH = PROJECT_ROOT / "data" / "events_openagenda.csv"
+INDEX_PATH = PROJECT_ROOT / "vectorstore" / "faiss_index"
+
+load_dotenv(dotenv_path=ENV_PATH)
+
+EMBEDDING_MODEL = os.getenv(
+    "MISTRAL_EMBEDDING_MODEL",
+    "mistral-embed",
+)
 
 
-def build_documents(df: pd.DataFrame):
+def build_documents(df: pd.DataFrame) -> list[Document]:
+    """
+    Transforme les événements du fichier CSV en documents
+    LangChain avec leurs métadonnées.
+    """
+
     documents = []
 
     for _, row in df.iterrows():
-        text = str(row.get("text_for_embedding", "")).strip()
+        text = str(
+            row.get("text_for_embedding", "")
+        ).strip()
 
         if not text:
             continue
@@ -27,25 +44,48 @@ def build_documents(df: pd.DataFrame):
             "title": str(row.get("title", "")),
             "begin": str(row.get("begin", "")),
             "end": str(row.get("end", "")),
-            "location_name": str(row.get("location_name", "")),
+            "location_name": str(
+                row.get("location_name", "")
+            ),
             "city": str(row.get("city", "")),
             "address": str(row.get("address", "")),
         }
 
-        documents.append(Document(page_content=text, metadata=metadata))
+        documents.append(
+            Document(
+                page_content=text,
+                metadata=metadata,
+            )
+        )
 
     return documents
 
 
-def build_faiss_index():
+def build_faiss_index() -> None:
+    """
+    Génère les embeddings Mistral et construit
+    l'index vectoriel FAISS.
+    """
+
+    api_key = os.getenv("MISTRAL_API_KEY")
+
+    if not api_key:
+        raise ValueError(
+            "MISTRAL_API_KEY est absente du fichier .env."
+        )
+
     if not DATA_PATH.exists():
-        raise FileNotFoundError(f"Fichier introuvable : {DATA_PATH}")
+        raise FileNotFoundError(
+            f"Fichier introuvable : {DATA_PATH}"
+        )
 
     df = pd.read_csv(DATA_PATH).fillna("")
     documents = build_documents(df)
 
     if not documents:
-        raise ValueError("Aucun document exploitable pour l'indexation.")
+        raise ValueError(
+            "Aucun document exploitable pour l'indexation."
+        )
 
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=800,
@@ -54,18 +94,33 @@ def build_faiss_index():
 
     chunks = splitter.split_documents(documents)
 
-    embeddings = HuggingFaceEmbeddings(
-        model_name=EMBEDDING_MODEL,
-        encode_kwargs={"normalize_embeddings": True},
+    print(
+        f"Génération des embeddings avec "
+        f"{EMBEDDING_MODEL}..."
     )
 
-    vectorstore = FAISS.from_documents(chunks, embeddings)
+    embeddings = MistralAIEmbeddings(
+        model=EMBEDDING_MODEL,
+        api_key=api_key,
+    )
 
-    INDEX_PATH.mkdir(parents=True, exist_ok=True)
-    vectorstore.save_local(str(INDEX_PATH))
+    vectorstore = FAISS.from_documents(
+        chunks,
+        embeddings,
+    )
+
+    INDEX_PATH.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    vectorstore.save_local(
+        str(INDEX_PATH)
+    )
 
     print(f"{len(documents)} événements chargés.")
     print(f"{len(chunks)} chunks indexés.")
+    print(f"Modèle d'embedding : {EMBEDDING_MODEL}")
     print(f"Index FAISS sauvegardé dans : {INDEX_PATH}")
 
 
