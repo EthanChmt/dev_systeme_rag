@@ -25,3 +25,7 @@ ragas
 
 # Déploiement
 gradio
+
+transformers
+accelerate
+torch
