@@ -31,3 +31,6 @@ vectorstore/*
 # Système
 .DS_Store
 Thumbs.db
+
+.pytest_cache/
+vectorstore/
