@@ -4,9 +4,14 @@ from pathlib import Path
 import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+import gradio as gr
 
+from app.interface import create_interface
 from app.chatbot import ask_chatbot
+import gradio as gr
 
+from app.interface import create_interface
+from app.interface_style import CUSTOM_CSS, PACA_THEME
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -177,3 +182,13 @@ def rebuild():
             status_code=500,
             detail=f"Erreur pendant la reconstruction : {error}",
         ) from error
+gradio_interface = create_interface()
+
+app = gr.mount_gradio_app(
+    app=app,
+    blocks=gradio_interface,
+    path="/interface",
+    theme=PACA_THEME,
+    css=CUSTOM_CSS,
+    footer_links=[],
+)
