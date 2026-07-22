@@ -1,13 +1,13 @@
-name: CI/CD Docker RAG
+name: CI Docker RAG
 
 on:
   push:
     branches:
       - develop
+  pull_request:
+    branches:
+      - develop
   workflow_dispatch:
-
-env:
-  IMAGE_NAME: ghcr.io/ethanchmt/dev_systeme_rag
 
 jobs:
   tests:
@@ -16,10 +16,10 @@ jobs:
 
     steps:
       - name: Récupérer le dépôt
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Installer Python 3.11
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
@@ -40,35 +40,35 @@ jobs:
           python scripts/fetch_openagenda_events.py
 
       - name: Construire l'index FAISS
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          MISTRAL_EMBEDDING_MODEL: "mistral-embed"
         run: |
           python scripts/build_faiss_index.py
 
       - name: Lancer les tests
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          MISTRAL_EMBEDDING_MODEL: "mistral-embed"
         run: |
           pytest -v
 
   docker:
-    name: Construire et publier l'image Docker
+    name: Vérification de l'image Docker
     runs-on: ubuntu-latest
     needs: tests
 
-    permissions:
-      contents: read
-      packages: write
-
     steps:
       - name: Récupérer le dépôt
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Construire l'image Docker
         run: |
           docker build \
-            --tag open-agenda-rag:test \
-            --tag ${{ env.IMAGE_NAME }}:latest \
-            --tag ${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            --tag open-agenda-rag:${{ github.sha }} \
             .
 
-      - name: Lancer le conteneur de test
+      - name: Lancer le conteneur
         env:
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
           OPENAGENDA_API_KEY: ${{ secrets.OPENAGENDA_API_KEY }}
@@ -77,50 +77,39 @@ jobs:
             --name open-agenda-rag-test \
             --publish 8000:8000 \
             --env MISTRAL_API_KEY="$MISTRAL_API_KEY" \
-            --env MISTRAL_MODEL="ministral-3b-2512" \
+            --env MISTRAL_EMBEDDING_MODEL="mistral-embed" \
+            --env HUGGINGFACE_GENERATION_MODEL="Qwen/Qwen2.5-1.5B-Instruct" \
             --env OPENAGENDA_API_KEY="$OPENAGENDA_API_KEY" \
             --env OPENAGENDA_AGENDA_UID="2476341" \
             --env OPENAGENDA_SEARCH="" \
             --env OPENAGENDA_CITY="" \
             --env OPENAGENDA_MAX_EVENTS="300" \
             --env PORT="8000" \
-            open-agenda-rag:test
+            open-agenda-rag:${{ github.sha }}
 
-      - name: Vérifier le conteneur
+      - name: Vérifier le démarrage de l'API
         run: |
-          for attempt in $(seq 1 30); do
+          for attempt in $(seq 1 60); do
             if curl --fail --silent http://127.0.0.1:8000/health; then
               echo
-              echo "L'API Docker répond correctement."
+              echo "Le conteneur Docker fonctionne correctement."
               exit 0
             fi
 
-            echo "Tentative ${attempt}/30 : API non disponible."
+            echo "Tentative ${attempt}/60 : API non disponible."
             sleep 10
           done
 
-          echo "Le conteneur n'a pas démarré correctement."
+          echo "Le conteneur n'a pas démarré dans le délai prévu."
           docker logs open-agenda-rag-test
           exit 1
 
-      - name: Afficher les journaux du conteneur
+      - name: Afficher les journaux Docker
         if: always()
         run: |
           docker logs open-agenda-rag-test || true
 
-      - name: Arrêter le conteneur de test
+      - name: Supprimer le conteneur de test
         if: always()
         run: |
           docker rm --force open-agenda-rag-test || true
-
-      - name: Se connecter à GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Publier l'image Docker
-        run: |
-          docker push ${{ env.IMAGE_NAME }}:latest
-          docker push ${{ env.IMAGE_NAME }}:${{ github.sha }}
