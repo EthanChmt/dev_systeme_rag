@@ -13,8 +13,7 @@ RUN apt-get update \
 COPY requirements.txt .
 
 RUN python -m pip install --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
-
+    && pip install --default-timeout=2000 -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
 COPY . .
 
 RUN chmod +x docker-entrypoint.sh

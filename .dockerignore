@@ -13,3 +13,7 @@ data
 vectorstore
 tests
 var_rag_interface.html
+.venv/
+__pycache__/
+*.csv
+*.log
