@@ -492,7 +492,7 @@ fluides. Ne transforme pas la réponse en liste.
 
     generated_output = generator(
         messages,
-        max_new_tokens=350,
+        max_new_tokens=1000,
         do_sample=False,
         repetition_penalty=1.1,
         return_full_text=False,
