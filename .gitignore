@@ -9,7 +9,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
+*.log
 # Variables d'environnement
 .env
 
