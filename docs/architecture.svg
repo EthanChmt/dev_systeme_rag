@@ -1,0 +1,77 @@
+<svg viewBox="0 0 1200 760" xmlns="http://www.w3.org/2000/svg" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="760" fill="#ffffff"/>
+
+  <text x="600" y="36" text-anchor="middle" font-size="20" font-weight="700" fill="#111827">Architecture — Puls-Events (POC RAG)</text>
+
+  <!-- Row 1 : Data ingestion -->
+  <rect x="40" y="70" width="220" height="80" rx="10" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="150" y="102" text-anchor="middle" font-size="15" font-weight="600" fill="#312e81">OpenAgenda API</text>
+  <text x="150" y="124" text-anchor="middle" font-size="12" fill="#4338ca">Événements bruts</text>
+
+  <line x1="260" y1="110" x2="330" y2="110" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect x="330" y="70" width="280" height="80" rx="10" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="470" y="95" text-anchor="middle" font-size="13" font-weight="600" fill="#312e81">fetch_openagenda_events.py</text>
+  <text x="470" y="113" text-anchor="middle" font-size="13" font-weight="600" fill="#312e81">build_faiss_index.py</text>
+  <text x="470" y="133" text-anchor="middle" font-size="12" fill="#4338ca">nettoyage + embeddings Mistral</text>
+
+  <line x1="610" y1="110" x2="680" y2="110" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect x="680" y="70" width="220" height="80" rx="10" fill="#eef2ff" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="790" y="102" text-anchor="middle" font-size="15" font-weight="600" fill="#312e81">Index FAISS</text>
+  <text x="790" y="124" text-anchor="middle" font-size="12" fill="#4338ca">vectorstore/</text>
+
+  <line x1="790" y1="150" x2="790" y2="200" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Row 2 : RAG pipeline -->
+  <rect x="400" y="200" width="480" height="200" rx="12" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5"/>
+  <text x="640" y="230" text-anchor="middle" font-size="15" font-weight="700" fill="#065f46">Pipeline RAG — app/chatbot.py</text>
+
+  <rect x="424" y="248" width="200" height="50" rx="8" fill="#ffffff" stroke="#10b981" stroke-width="1"/>
+  <text x="524" y="268" text-anchor="middle" font-size="12" font-weight="600" fill="#065f46">Retrieval FAISS</text>
+  <text x="524" y="284" text-anchor="middle" font-size="11" fill="#047857">similarity_search (k=100)</text>
+
+  <line x1="624" y1="273" x2="656" y2="273" stroke="#10b981" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect x="656" y="248" width="200" height="50" rx="8" fill="#ffffff" stroke="#10b981" stroke-width="1"/>
+  <text x="756" y="265" text-anchor="middle" font-size="12" font-weight="600" fill="#065f46">Filtrage métier</text>
+  <text x="756" y="281" text-anchor="middle" font-size="11" fill="#047857">futurs + dédup + top 3</text>
+
+  <line x1="640" y1="298" x2="640" y2="316" stroke="#10b981" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <rect x="424" y="316" width="432" height="60" rx="8" fill="#ffffff" stroke="#10b981" stroke-width="1"/>
+  <text x="640" y="338" text-anchor="middle" font-size="12" font-weight="600" fill="#065f46">Prompt strict + génération locale</text>
+  <text x="640" y="356" text-anchor="middle" font-size="11" fill="#047857">Hugging Face (Qwen2.5-1.5B-Instruct) · GPU si disponible, sinon CPU</text>
+
+  <line x1="640" y1="400" x2="640" y2="450" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Row 3 : FastAPI -->
+  <rect x="350" y="450" width="580" height="120" rx="12" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="640" y="478" text-anchor="middle" font-size="15" font-weight="700" fill="#1e3a8a">API FastAPI — app/api.py</text>
+  <text x="640" y="500" text-anchor="middle" font-size="12" fill="#1d4ed8">GET / · GET /health · POST /ask · POST /rebuild · GET /docs</text>
+  <text x="640" y="520" text-anchor="middle" font-size="12" fill="#1d4ed8">monte aussi l'interface Gradio sur GET /interface</text>
+  <text x="640" y="540" text-anchor="middle" font-size="11" fill="#1e40af">(gradio.mount_gradio_app)</text>
+
+  <!-- Branches to two UIs -->
+  <line x1="500" y1="570" x2="230" y2="630" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="780" y1="570" x2="1000" y2="630" stroke="#4b5563" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Row 4 : two UIs -->
+  <rect x="60" y="630" width="340" height="100" rx="12" fill="#fdf4ff" stroke="#a855f7" stroke-width="1.5"/>
+  <text x="230" y="658" text-anchor="middle" font-size="14" font-weight="700" fill="#6b21a8">UI Gradio « PACA »</text>
+  <text x="230" y="678" text-anchor="middle" font-size="12" fill="#7e22ce">app/interface.py — /interface</text>
+  <text x="230" y="696" text-anchor="middle" font-size="11" fill="#86198f">appelle l'API via httpx (POST /ask, /rebuild)</text>
+  <text x="230" y="714" text-anchor="middle" font-size="11" fill="#86198f">cartes de sources + statut système</text>
+
+  <rect x="800" y="630" width="340" height="100" rx="12" fill="#fff7ed" stroke="#f97316" stroke-width="1.5"/>
+  <text x="970" y="658" text-anchor="middle" font-size="14" font-weight="700" fill="#9a3412">UI Gradio minimale</text>
+  <text x="970" y="678" text-anchor="middle" font-size="12" fill="#c2410c">app_gradio.py (racine)</text>
+  <text x="970" y="696" text-anchor="middle" font-size="11" fill="#9a3412">appelle ask_chatbot() directement</text>
+  <text x="970" y="714" text-anchor="middle" font-size="11" fill="#9a3412">sans passer par l'API HTTP</text>
+</svg>
