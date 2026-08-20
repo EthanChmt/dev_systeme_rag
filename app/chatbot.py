@@ -3,11 +3,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
+from langchain_classic.retrievers import EnsembleRetriever
+from langchain_community.retrievers import BM25Retriever
 from langchain_community.vectorstores import FAISS
 from langchain_mistralai import MistralAIEmbeddings
 from transformers import pipeline
 
 import torch
+
 # ============================================================
 # CONFIGURATION
 # ============================================================
@@ -28,11 +31,7 @@ GENERATION_MODEL = os.getenv(
     "Qwen/Qwen2.5-1.5B-Instruct",
 )
 
-# Nombre maximal d'événements proposés.
 MAX_EVENTS_IN_CONTEXT = 3
-
-# Le modèle Hugging Face reste chargé en mémoire
-# après sa première utilisation.
 TEXT_GENERATOR = None
 
 
@@ -41,11 +40,6 @@ TEXT_GENERATOR = None
 # ============================================================
 
 def load_vectorstore():
-    """
-    Charge l'index FAISS avec le modèle d'embedding Mistral
-    utilisé lors de sa construction.
-    """
-
     if not INDEX_PATH.exists():
         raise FileNotFoundError(
             f"Index FAISS introuvable : {INDEX_PATH}. "
@@ -81,11 +75,6 @@ def load_vectorstore():
 
 
 def load_text_generator():
-    """
-    Charge le modèle Hugging Face sur le GPU NVIDIA
-    lorsqu'il est disponible, avec repli automatique sur le CPU.
-    """
-
     global TEXT_GENERATOR
 
     if TEXT_GENERATOR is not None:
@@ -95,28 +84,15 @@ def load_text_generator():
 
     if cuda_available:
         device_name = torch.cuda.get_device_name(0)
-
-        print(
-            "GPU CUDA détecté : "
-            f"{device_name}"
-        )
-
+        print(f"GPU CUDA détecté : {device_name}")
         device = 0
         model_dtype = torch.float16
-
     else:
-        print(
-            "Aucun GPU CUDA détecté. "
-            "Utilisation du CPU."
-        )
-
+        print("Aucun GPU CUDA détecté. Utilisation du CPU.")
         device = -1
         model_dtype = torch.float32
 
-    print(
-        "Chargement du modèle de génération : "
-        f"{GENERATION_MODEL}"
-    )
+    print(f"Chargement du modèle de génération : {GENERATION_MODEL}")
 
     TEXT_GENERATOR = pipeline(
         task="text-generation",
@@ -127,7 +103,7 @@ def load_text_generator():
     )
 
     print(
-        "Modèle Hugging Face chargé sur "
+        f"Modèle Hugging Face chargé sur "
         f"{'GPU' if cuda_available else 'CPU'}."
     )
 
@@ -139,11 +115,6 @@ def load_text_generator():
 # ============================================================
 
 def parse_event_date(value):
-    """
-    Convertit une date provenant des métadonnées FAISS
-    en objet datetime avec fuseau horaire.
-    """
-
     if not value:
         return None
 
@@ -163,32 +134,13 @@ def parse_event_date(value):
         return None
 
 
-def filter_future_documents(documents):
-    """
-    Conserve uniquement les événements futurs et retire
-    les doublons.
-
-    L'ordre retourné par FAISS est conservé afin de préserver
-    le classement par pertinence sémantique.
-    """
-
-    now = datetime.now(timezone.utc)
-    future_documents = []
+def filter_unique_documents(documents):
     seen_events = set()
+    unique_documents = []
 
     for document in documents:
         metadata = document.metadata
-
-        begin_date = parse_event_date(
-            metadata.get("begin")
-        )
-
-        if begin_date is None:
-            continue
-
-        if begin_date.astimezone(timezone.utc) < now:
-            continue
-
+        
         event_identifier = (
             metadata.get("uid"),
             metadata.get("title"),
@@ -199,27 +151,17 @@ def filter_future_documents(documents):
             continue
 
         seen_events.add(event_identifier)
-        future_documents.append(document)
+        unique_documents.append(document)
 
-    # Aucun tri par date ici :
-    # l'ordre de pertinence FAISS doit être conservé.
-    return future_documents
+    return unique_documents
 
 
 def format_context(documents):
-    """
-    Transforme les événements récupérés en contexte lisible
-    pour le modèle de génération.
-    """
-
     context_parts = []
 
-    for index, document in enumerate(
-        documents,
-        start=1,
-    ):
+    for index, document in enumerate(documents, start=1):
         metadata = document.metadata
-
+        
         context_parts.append(
             f"""
 Événement {index}
@@ -239,14 +181,7 @@ Description :
     return "\n\n".join(context_parts)
 
 
-def build_availability_instruction(
-    event_count: int,
-) -> str:
-    """
-    Construit la consigne liée au nombre d'événements
-    disponibles.
-    """
-
+def build_availability_instruction(event_count: int) -> str:
     if event_count == 1:
         return (
             "Un seul événement est disponible. "
@@ -270,35 +205,16 @@ def build_availability_instruction(
     )
 
 
-def add_limited_results_notice(
-    answer: str,
-    event_count: int,
-) -> str:
-    """
-    Ajoute automatiquement une précision lorsque moins
-    de trois événements sont disponibles.
-
-    Cette étape ne dépend pas du respect du prompt
-    par le modèle local.
-    """
-
+def add_limited_results_notice(answer: str, event_count: int) -> str:
     answer = answer.strip()
 
     if event_count == 1:
-        notice = (
-            "Je n’ai trouvé qu’un seul événement "
-            "correspondant à votre recherche."
-        )
-
+        notice = "Je n’ai trouvé qu’un seul événement correspondant à votre recherche."
         if notice.lower() not in answer.lower():
             return f"{notice}\n\n{answer}"
 
     if event_count == 2:
-        notice = (
-            "Je n’ai trouvé que deux événements "
-            "correspondant à votre recherche."
-        )
-
+        notice = "Je n’ai trouvé que deux événements correspondant à votre recherche."
         if notice.lower() not in answer.lower():
             return f"{notice}\n\n{answer}"
 
@@ -310,36 +226,20 @@ def add_limited_results_notice(
 # ============================================================
 
 def extract_generated_answer(generated_output):
-    """
-    Extrait le texte final retourné par la pipeline
-    Hugging Face.
-    """
-
     if not generated_output:
         return ""
 
-    generated_text = generated_output[0].get(
-        "generated_text",
-        "",
-    )
+    generated_text = generated_output[0].get("generated_text", "")
 
     if isinstance(generated_text, list):
         for message in reversed(generated_text):
-            if (
-                isinstance(message, dict)
-                and message.get("role") == "assistant"
-            ):
-                return str(
-                    message.get("content", "")
-                ).strip()
+            if isinstance(message, dict) and message.get("role") == "assistant":
+                return str(message.get("content", "")).strip()
 
         if generated_text:
             last_message = generated_text[-1]
-
             if isinstance(last_message, dict):
-                return str(
-                    last_message.get("content", "")
-                ).strip()
+                return str(last_message.get("content", "")).strip()
 
     return str(generated_text).strip()
 
@@ -349,79 +249,77 @@ def extract_generated_answer(generated_output):
 # ============================================================
 
 def ask_chatbot(question: str) -> dict:
-    """
-    Recherche les événements pertinents dans FAISS,
-    conserve les événements futurs puis génère une réponse
-    avec le modèle Hugging Face local.
-    """
-
     question = str(question or "").strip()
 
     if not question:
-        raise ValueError(
-            "La question ne peut pas être vide."
-        )
+        raise ValueError("La question ne peut pas être vide.")
 
     print("5. Chargement de la base vectorielle...")
     vectorstore = load_vectorstore()
 
-    print("6. Recherche sémantique dans FAISS...")
-
-    candidate_documents = vectorstore.similarity_search(
-        question,
-        k=100,
+    print("6. Préparation de la recherche hybride (FAISS + BM25)...")
+    
+    faiss_retriever = vectorstore.as_retriever(
+        search_type="similarity_score_threshold",
+        search_kwargs={
+            "score_threshold": 0.43,
+            "k": 100
+        }
+    )
+    
+    documents_for_bm25 = list(vectorstore.docstore._dict.values())
+    bm25_retriever = BM25Retriever.from_documents(documents_for_bm25)
+    bm25_retriever.k = 100
+    
+    ensemble_retriever = EnsembleRetriever(
+        retrievers=[bm25_retriever, faiss_retriever],
+        weights=[0.1, 0.9]
     )
 
-    print(
-        f"7. {len(candidate_documents)} chunks candidats "
-        "récupérés."
-    )
-
-    documents = filter_future_documents(
-        candidate_documents
-    )
-
-    # On conserve les trois premiers événements uniques
-    # dans l'ordre de pertinence FAISS.
-    documents = documents[
-        :MAX_EVENTS_IN_CONTEXT
-    ]
-
-    event_count = len(documents)
-
-    print(
-        f"8. {event_count} événements futurs et uniques "
-        "conservés."
-    )
-
-    if not documents:
+    print("7. Validation sémantique par FAISS...")
+    faiss_validation = faiss_retriever.invoke(question)
+    
+    if not faiss_validation:
+        print("8. Rejet : Aucun événement ne franchit le seuil sémantique de 0.43.")
         return {
             "question": question,
             "answer": (
-                "Je ne dispose pas d’événement futur "
+                "Je ne dispose pas d’événement "
                 "suffisamment pertinent pour répondre "
                 "à cette question."
             ),
             "sources": [],
         }
 
-    availability_instruction = (
-        build_availability_instruction(
-            event_count
-        )
-    )
+    print("8. Exécution de la recherche hybride...")
+    candidate_documents = ensemble_retriever.invoke(question)
 
-    print("9. Construction du contexte...")
+    print(f"9. {len(candidate_documents)} chunks candidats récupérés.")
 
-    context = format_context(
-        documents
-    )
+    documents = filter_unique_documents(candidate_documents)
+    documents = documents[:MAX_EVENTS_IN_CONTEXT]
+    event_count = len(documents)
 
-    print("10. Contexte construit.")
+    print(f"10. {event_count} événements uniques conservés.")
 
-    current_date = datetime.now().strftime(
-        "%d/%m/%Y"
-    )
+    if not documents:
+        return {
+            "question": question,
+            "answer": (
+                "Je ne dispose pas d’événement "
+                "suffisamment pertinent pour répondre "
+                "à cette question."
+            ),
+            "sources": [],
+        }
+
+    availability_instruction = build_availability_instruction(event_count)
+
+    print("11. Construction du contexte...")
+    context = format_context(documents)
+    print("12. Contexte construit.")
+
+    current_date = datetime.now().strftime("%d/%m/%Y")
 
     system_prompt = f"""
 Tu es un assistant spécialisé dans les recommandations culturelles.
@@ -447,7 +345,6 @@ Règles obligatoires :
 - Lorsqu'un seul événement est disponible, présente uniquement celui-ci.
 - N'invente aucun événement.
 - N'invente aucune date, aucun lieu, aucun tarif ou aucune activité.
-- Ne propose jamais un événement dont la date est passée.
 - Utilise uniquement les informations présentes dans le contexte.
 - Pour chaque événement présenté, indique naturellement son titre, sa date, sa ville et son lieu.
 - Si une information n'est pas présente dans le contexte, ne la complète pas.
@@ -478,17 +375,11 @@ fluides. Ne transforme pas la réponse en liste.
     generator = load_text_generator()
 
     messages = [
-        {
-            "role": "system",
-            "content": system_prompt,
-        },
-        {
-            "role": "user",
-            "content": human_prompt,
-        },
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": human_prompt},
     ]
 
-    print("11. Génération locale de la réponse...")
+    print("13. Génération locale de la réponse...")
 
     generated_output = generator(
         messages,
@@ -498,9 +389,7 @@ fluides. Ne transforme pas la réponse en liste.
         return_full_text=False,
     )
 
-    answer = extract_generated_answer(
-        generated_output
-    )
+    answer = extract_generated_answer(generated_output)
 
     if not answer:
         raise RuntimeError(
@@ -513,26 +402,21 @@ fluides. Ne transforme pas la réponse en liste.
         event_count=event_count,
     )
 
-    print("12. Réponse Hugging Face générée.")
+    print("14. Réponse Hugging Face générée.")
 
     sources = []
-
     for document in documents:
         metadata = document.metadata
-
         sources.append(
             {
                 "uid": metadata.get("uid"),
                 "title": metadata.get("title"),
                 "begin": metadata.get("begin"),
                 "end": metadata.get("end"),
-                "location_name": metadata.get(
-                    "location_name"
-                ),
+                "location_name": metadata.get("location_name"),
                 "city": metadata.get("city"),
-                "address": metadata.get(
-                    "address"
-                ),
+                "address": metadata.get("address"),
+                "content": document.page_content,
             }
         )
 
@@ -548,20 +432,12 @@ fluides. Ne transforme pas la réponse en liste.
 # ============================================================
 
 def main():
-    """Lance le chatbot directement dans le terminal."""
-
     try:
-        user_question = input(
-            "Pose ta question : "
-        ).strip()
+        user_question = input("Pose ta question : ").strip()
 
-        print(
-            "\nDémarrage du pipeline RAG...\n"
-        )
+        print("\nDémarrage du pipeline RAG...\n")
 
-        result = ask_chatbot(
-            user_question
-        )
+        result = ask_chatbot(user_question)
 
         print("\n" + "=" * 60)
         print("RÉPONSE")
@@ -573,45 +449,24 @@ def main():
         print("=" * 60)
 
         if not result["sources"]:
-            print(
-                "Aucune source future récupérée."
-            )
+            print("Aucune source récupérée.")
             return
 
-        for index, source in enumerate(
-            result["sources"],
-            start=1,
-        ):
+        for index, source in enumerate(result["sources"], start=1):
             print(f"\nSource {index}")
-            print(
-                f"Titre : {source['title']}"
-            )
-            print(
-                f"Début : {source['begin']}"
-            )
-            print(
-                f"Fin : {source['end']}"
-            )
-            print(
-                f"Lieu : {source['location_name']}"
-            )
-            print(
-                f"Ville : {source['city']}"
-            )
-            print(
-                f"Adresse : {source['address']}"
-            )
+            print(f"Titre : {source['title']}")
+            print(f"Début : {source['begin']}")
+            print(f"Fin : {source['end']}")
+            print(f"Lieu : {source['location_name']}")
+            print(f"Ville : {source['city']}")
+            print(f"Adresse : {source['address']}")
 
     except Exception as error:
         print("\n" + "=" * 60)
         print("ERREUR")
         print("=" * 60)
-        print(
-            f"Type : {type(error).__name__}"
-        )
-        print(
-            f"Message : {error}"
-        )
+        print(f"Type : {type(error).__name__}")
+        print(f"Message : {error}")
 
 
 if __name__ == "__main__":
