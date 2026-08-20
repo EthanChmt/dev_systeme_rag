@@ -27,12 +27,13 @@ def generer_donnees_evaluation(input_csv: str, output_csv: str):
             texts = []
             for s in sources:
                 texte_source = (
-                    f"Titre : {s.get('title')}\n"
-                    f"Lieu : {s.get('location_name')} - {s.get('city')}\n"
-                    f"Dates : {s.get('begin')} au {s.get('end')}\n"
-                    f"Adresse : {s.get('address')}"
+                    f"Titre : {s.get('title', '')}\n"
+                    f"Lieu : {s.get('location_name', '')} - {s.get('city', '')}\n"
+                    f"Dates : {s.get('begin', '')} au {s.get('end', '')}\n"
+                    f"Adresse : {s.get('address', '')}\n"
+                    f"Description : {s.get('content', '')}"
                 )
-                texts.append(texte_source)
+                texts.append(texte_source.strip())
                 
             reponses_generees.append(answer)
             contextes_recuperes.append(texts)
@@ -52,6 +53,6 @@ def generer_donnees_evaluation(input_csv: str, output_csv: str):
     print(f"\nFichier final sauvegardé : {output_csv}")
 
 if __name__ == "__main__":
-    input_path = os.path.join(BASE_DIR, "data", "questions_test_rag.csv")
-    output_path = os.path.join(BASE_DIR, "data", "rag_output_complet.csv")
+    input_path = os.path.join(BASE_DIR, "data", "questions_test_rag_v3.csv")
+    output_path = os.path.join(BASE_DIR, "data", "rag_output_complet3.csv")
     generer_donnees_evaluation(input_path, output_path)
